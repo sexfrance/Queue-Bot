@@ -41,7 +41,7 @@ def delete_old_unclaimed():
 def create_embed(title, description, color=discord.Color.pink()):
     embed = discord.Embed(title=title, description=description, color=color)
     embed.set_thumbnail(url=config["THUMBNAIL_URL"])
-    embed.set_footer(text=f"Powered by .gg/bestnitro • {datetime.now().strftime('%H:%M:%S')}", icon_url=config["THUMBNAIL_URL"])
+    embed.set_footer(text=f"{config["FOOTER"]} • {datetime.now().strftime('%H:%M:%S')}", icon_url=config["THUMBNAIL_URL"])
     return embed
 
 # Check admin or owner
@@ -143,6 +143,7 @@ async def on_ready():
     bot.add_view(RedeemView())  # Add the persistent view here
     await bot.wait_until_ready()  # Ensure the bot is fully ready
     check_sellix_orders.start()
+    await bot.change_presence(status=discord.Status.dnd, activity=discord.Game(config["BOT_STATUS"]))
 
 # Task to check for new Sellix orders
 @tasks.loop(seconds=15)
