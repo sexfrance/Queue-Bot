@@ -29,6 +29,7 @@
 - Nice Embeds
 - Improved Logging
 - Easy rebrand
+- Dms user when new order gets redeemed
 -  ℹ️  `.help` - List all available commands
 - 📨 `.message` - Send a message with a redeem button
 - 🗑️ `.dele <order_id>` - Remove an order from the queue
@@ -41,7 +42,7 @@
 ---
 #### 📹 Preview
 
-![Queue Bot Help Command](https://i.imgur.com/KnpXXTx.png) ![Queue Bot Queue System](https://i.imgur.com/jSW9edH.png)
+![Queue Bot Help Command](https://i.imgur.com/KnpXXTx.png) ![Queue Bot Queue System](https://i.imgur.com/jSW9edH.png) ![Queue Bot DM](https://i.imgur.com/dE6Dhp9.png)
 
 ---
 ### ❗ Disclaimers
