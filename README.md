@@ -56,8 +56,11 @@
 ### 📜 ChangeLog
 
 ```diff
-v0.0.1 ⋮ 8/6/2024
+v0.0.1 ⋮ 07/20/2024
 ! Initial release
+v0.0.3 ⋮ 07/23/2024
+! Made branding easier by adding a custom embed color directly into config.json with formatter in case of misuse. Improved .deliver command to also dm the user once the product has been delivered, made it so that it works with a str/int e.g. .deliver order-123 hi@gmail.com, with a file: e.g. .deliver order-123 product.txt (must be an attachment) or without anything e.g. .deliver order-123
+
 ```
 
 ---
