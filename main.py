@@ -376,7 +376,7 @@ async def help(ctx):
     embed.add_field(name=".dele <order_id>", value="Remove an order from the queue", inline=False)
     embed.add_field(name=".add <order_id> <product> <quantity> <user>", value="Manually add an order to the queue", inline=False)
     embed.add_field(name=".pend <order_id>", value="Mark an order as pending", inline=False)
-    embed.add_field(name=".deliver <order_id>", value="Mark an order as delivered", inline=False)
+    embed.add_field(name=".deliver <order_id> (product/attachment)", value="Mark an order as delivered", inline=False)
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
     embed.add_field(name=".set_queue <channel_id>", value="Set the queue channel ID", inline=False)
     embed.add_field(name=".check ", value="Checks pending orders", inline=False)
