@@ -276,14 +276,13 @@ async def pend(ctx, order_id: str):
 async def deliver(ctx, order_id: str, *args):
     claimed_data = load_json(config['CLAIMED_JSON'])
     if order_id in claimed_data:
-        user_id = claimed_data[order_id]['user']
-        user = bot.get_user(user_id)
+        user_id = claimed_data[order_id]['custom_fields']['discord_id']
+        user = await bot.fetch_user(user_id)
 
         if not user:
             await ctx.send(embed=create_embed("Error", f"User with ID {user_id} not found.", discord.Color.red()))
-            return
 
-        product = claimed_data[order_id]['product']
+        product = claimed_data[order_id]['product_title']
         quantity = claimed_data[order_id]['quantity']
         total_price = claimed_data[order_id].get('total', '1')  # Extract total price from the order data
         claimed_data[order_id]['status'] = "Delivered"
