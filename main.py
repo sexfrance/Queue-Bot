@@ -29,6 +29,18 @@ def save_json(file, data):
     with open(file, 'w') as f:
         json.dump(data, f, indent=4)
 
+# Formatting the EMBED_COLOR from config
+def format_color(color):
+    if color.startswith('#'):
+        color = '0x' + color[1:]
+    elif not color.startswith('0x'):
+        color = '0x' + color
+    return int(color, 16)
+
+# Usage example
+embed_color = format_color(config["EMBED_COLOR"])
+
+
 def delete_old_unclaimed():
     now = datetime.now()
     for file in os.listdir(config['UNCLAIMED_FOLDER']):
@@ -38,7 +50,7 @@ def delete_old_unclaimed():
             if now - creation_time > timedelta(weeks=1):
                 os.remove(path)
 
-def create_embed(title, description, color=discord.Color.pink()):
+def create_embed(title, description, color=embed_color):
     embed = discord.Embed(title=title, description=description, color=color)
     embed.set_thumbnail(url=config["THUMBNAIL_URL"])
     embed.set_footer(text=f"{config["FOOTER"]} • {datetime.now().strftime('%H:%M:%S')}", icon_url=config["THUMBNAIL_URL"])
@@ -73,7 +85,7 @@ class OrderModal(discord.ui.Modal):
                 queue_embed = discord.Embed(
                     title="Queue System",
                     description=f"<:user:1263827156723826770>・__**Name**__ | <@{interaction.user.id}>\n<:world:1263827158397227061>・__**Product**__ | {order_data['product_title']}\n<:tool:1263827165737254933>・__**Quantity**__ | {order_data['quantity']}x\n<:check:1263827108581605427>・__**Status**__ | Pending",
-                    color=discord.Color.pink()
+                    color=embed_color
                 )
                 queue_embed.set_thumbnail(url=config["THUMBNAIL_URL"])
                 queue_embed.set_footer(text=f"Order ID: {order_id}", icon_url=config["THUMBNAIL_URL"])
@@ -93,7 +105,7 @@ class OrderModal(discord.ui.Modal):
                         dm_embed = discord.Embed(
                             title="New Pending Order",
                             description=f"A new order has been redeemed and is pending. Here are the details:",
-                            color=discord.Color.pink()
+                            color=embed_color
                         )
                         dm_embed.add_field(name="User", value=f"<@{interaction.user.id}>", inline=False)
                         dm_embed.add_field(name="Product", value=order_data['product_title'], inline=False)
@@ -215,7 +227,7 @@ async def add(ctx, order_id: str, product: str, quantity: int, user: discord.Use
     queue_embed = discord.Embed(
         title="Queue System",
         description=f"<:user:1263827156723826770>・__**Name**__ | <@{user.id}>\n<:world:1263827158397227061>・__**Product**__ | {product}\n<:tool:1263827165737254933>・__**Quantity**__ | {quantity}x\n<:check:1263827108581605427>・__**Status**__ | Pending",
-        color=discord.Color.pink()
+        color=embed_color
     )
     queue_embed.set_thumbnail(url=config["THUMBNAIL_URL"])
     queue_embed.set_footer(text=f"Order ID: {order_id}", icon_url=config["THUMBNAIL_URL"])
@@ -230,7 +242,7 @@ async def add(ctx, order_id: str, product: str, quantity: int, user: discord.Use
         dm_embed = discord.Embed(
             title="New Pending Order",
             description=f"A new order has been manually added and is pending. Here are the details:",
-            color=discord.Color.pink()
+            color=embed_color
         )
         dm_embed.add_field(name="User", value=f"<@{user.id}>", inline=False)
         dm_embed.add_field(name="Product", value=product, inline=False)
@@ -241,6 +253,7 @@ async def add(ctx, order_id: str, product: str, quantity: int, user: discord.Use
         dm_embed.set_footer(text=f"Order ID: {order_id}", icon_url=config["THUMBNAIL_URL"])
         dm_embed.set_image(url=config["IMAGE_URL"])
         await owner.send(embed=dm_embed)
+
 
 @bot.command()
 @is_admin_or_owner()
@@ -260,17 +273,72 @@ async def pend(ctx, order_id: str):
 
 @bot.command()
 @is_admin_or_owner()
-async def deliver(ctx, order_id: str):
+async def deliver(ctx, order_id: str, *args):
     claimed_data = load_json(config['CLAIMED_JSON'])
     if order_id in claimed_data:
+        user_id = claimed_data[order_id]['user']
+        user = bot.get_user(user_id)
+
+        if not user:
+            await ctx.send(embed=create_embed("Error", f"User with ID {user_id} not found.", discord.Color.red()))
+            return
+
+        product = claimed_data[order_id]['product']
+        quantity = claimed_data[order_id]['quantity']
+        total_price = claimed_data[order_id].get('total', '1')  # Extract total price from the order data
         claimed_data[order_id]['status'] = "Delivered"
         save_json(config['CLAIMED_JSON'], claimed_data)
+
         channel = bot.get_channel(claimed_data[order_id]['channel_id'])
         message = await channel.fetch_message(claimed_data[order_id]['message_id'])
         embed = message.embeds[0]
         embed.description = embed.description.replace("<:check:1263827108581605427>・__**Status**__ | Pending", "<:check:1263827108581605427>・__**Status**__ | Delivered")
         await message.edit(embed=embed)
-        await ctx.send(embed=create_embed("Order Status Updated", f"Order **{order_id}** status has been updated to delivered."))
+
+        # Create the embed in the style of the queue system
+        dm_embed = discord.Embed(
+            title="Order Delivered",
+            description=(
+                f"<:user:1263827156723826770>・__**Name**__ | <@{user_id}>\n"
+                f"<:world:1263827158397227061>・__**Product**__ | {product}\n"
+                f"<:tool:1263827165737254933>・__**Quantity**__ | {quantity}x\n"
+                f"<:check:1263827108581605427>・__**Status**__ | Delivered"
+            ),
+            color=embed_color
+        )
+        dm_embed.set_thumbnail(url=config["THUMBNAIL_URL"])
+        dm_embed.set_footer(text=f"Order ID: {order_id}", icon_url=config["THUMBNAIL_URL"])
+        dm_embed.set_image(url=config["IMAGE_URL"])
+
+        if ctx.message.attachments:
+            file = ctx.message.attachments[0]
+            dm_embed.add_field(name = "", value="\n__**Please check the attachment below:__**", inline=False)
+            await user.send(embed=dm_embed)
+            await user.send(file=await file.to_file())
+        elif args:
+            product_str = " ".join(args)
+            dm_embed.add_field(name="Please see the product details below:", value=f"```\n{product_str}\n```", inline=False)
+            await user.send(embed=dm_embed)
+        else:
+            dm_embed.add_field(name = "", value="\n**Please check your ticket or DMs.**", inline=False)
+            await user.send(embed=dm_embed)
+
+        await ctx.send(embed=create_embed("Order Status Updated", f"Order **{order_id}** status has been updated to delivered. A message has been sent to the user."))
+
+        # Create the vouch message embed
+        vouch_message = f"+rep <@{config['OWNER_ID']}> {product} {quantity}x ${total_price}"
+        vouch_embed = discord.Embed(
+            title="Vouch Message",
+            description="Please copy and paste the following vouch message in https://discord.com/channels/888116029803360317/1234847586679263323:",
+            color=embed_color
+        )
+        vouch_embed.add_field(name="Vouch Message", value=f"```\n{vouch_message}\n```", inline=False)
+        vouch_embed.set_thumbnail(url=config["THUMBNAIL_URL"])
+        vouch_embed.set_footer(text=f"Order ID: {order_id}", icon_url=config["THUMBNAIL_URL"])
+
+        # Send the vouch message embed to the user
+        await user.send(embed=vouch_embed)
+
     else:
         await ctx.send(embed=create_embed("Error", f"Order **{order_id}** not found in the queue.", discord.Color.red()))
 
