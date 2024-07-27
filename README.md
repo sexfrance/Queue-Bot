@@ -29,7 +29,10 @@
 - Nice Embeds
 - Improved Logging
 - Easy rebrand
-- Dms user when new order gets redeemed
+- Creates vouch messages
+- Can dm the user with his product (file/text)
+- Dms owner when new order gets redeemed
+- More to discover!
 -  ℹ️  `.help` - List all available commands
 - 📨 `.message` - Send a message with a redeem button
 - 🗑️ `.dele <order_id>` - Remove an order from the queue
