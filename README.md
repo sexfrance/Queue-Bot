@@ -2,7 +2,7 @@
  
   <h2 align="center">Discord - Queue Bot</h2>
   <p align="center">
-    Discord Queue bot used to handle your discord orders! Every 15 seconds it will scan your sellix orders for a "sellix service order", you can of course easily change that. It will then save the orders into json and when someone presses the redeem button there will be an input asking for orderid then it will add the user to the queue! The bot is adapted for my server but you can rebrand it easily. It also dms the owner of the bot when a new user redeems an order and has been added to the queue!
+    Discord Queue bot used to handle your discord orders! Every 10 seconds it will scan your sellix orders for a "sellix service order", you can of course easily change that. It will then save the orders into json and when someone presses the redeem button there will be an input asking for orderid then it will add the user to the queue! The bot is adapted for my server but you can rebrand it easily. It also dms the owner of the bot when a new user redeems an order and has been added to the queue!
     <br />
     <br />
     <a href="https://discord.gg/bestnitro">💬 Discord</a>
