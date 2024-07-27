@@ -402,7 +402,7 @@ async def help(ctx):
     embed.add_field(name=".deliver <order_id> (product/attachment)", value="Mark an order as delivered", inline=False)
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
     embed.add_field(name=".set_queue <channel_id>", value="Set the queue channel ID", inline=False)
-    embed.add_field(name=".check /(user_ping)/(orderid", value="Checks all pending orders, can also check pending order for a user/orderid", inline=False)
+    embed.add_field(name=".check /(user_ping)/(orderid)", value="Shows all pending orders in the Queue, can also check pending order for a user/orderid", inline=False)
     embed.add_field(name=".restart ", value="Restarts the bot", inline=False)
     await ctx.send(embed=embed)
 
