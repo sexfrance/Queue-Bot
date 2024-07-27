@@ -5,6 +5,9 @@ import os
 import requests
 from datetime import datetime, timedelta
 from discord.ui import Button, View
+import sys
+import asyncio
+
 
 # Load configuration
 def load_config():
@@ -12,6 +15,8 @@ def load_config():
         return json.load(f)
 
 config = load_config()
+file_path = __file__
+file_name = os.path.basename(file_path)
 
 # Bot setup
 intents = discord.Intents.all()
@@ -158,7 +163,7 @@ async def on_ready():
     await bot.change_presence(status=discord.Status.dnd, activity=discord.Game(config["BOT_STATUS"]))
 
 # Task to check for new Sellix orders
-@tasks.loop(seconds=15)
+@tasks.loop(seconds=10)
 async def check_sellix_orders():
     headers = {
         'Authorization': f'Bearer {config["SELLIX_API_KEY"]}',
@@ -260,8 +265,6 @@ async def add(ctx, order_id: str, product: str, quantity: int, user: discord.Use
 async def pend(ctx, order_id: str):
     claimed_data = load_json(config['CLAIMED_JSON'])
     if order_id in claimed_data:
-        claimed_data[order_id]['status'] = "Pending"
-        save_json(config['CLAIMED_JSON'], claimed_data)
         channel = bot.get_channel(claimed_data[order_id]['channel_id'])
         message = await channel.fetch_message(claimed_data[order_id]['message_id'])
         embed = message.embeds[0]
@@ -276,15 +279,32 @@ async def pend(ctx, order_id: str):
 async def deliver(ctx, order_id: str, *args):
     claimed_data = load_json(config['CLAIMED_JSON'])
     if order_id in claimed_data:
-        user_id = claimed_data[order_id]['custom_fields']['discord_id']
-        user = await bot.fetch_user(user_id)
+        user_id = claimed_data[order_id].get('user', None)
+        
+        if not user_id:
+            await ctx.send(embed=create_embed("Ping User Required", f"Please ping the user for order **{order_id}**."))
+            
+            def check(m):
+                return m.author == ctx.author and m.mentions
 
-        if not user:
-            await ctx.send(embed=create_embed("Error", f"User with ID {user_id} not found.", discord.Color.red()))
+            try:
+                message = await bot.wait_for('message', check=check, timeout=60)
+                user = message.mentions[0]
+                user_id = user.id
+                claimed_data[order_id]['user'] = user_id
+                save_json(config['CLAIMED_JSON'], claimed_data)
+            except asyncio.TimeoutError:
+                await ctx.send(embed=create_embed("Error", "No user pinged within 60 seconds. Command cancelled.", discord.Color.red()))
+                return
+        else:
+            user = await bot.fetch_user(user_id)
+            if not user:
+                await ctx.send(embed=create_embed("Error", f"User with ID {user_id} not found.", discord.Color.red()))
+                return
 
         product = claimed_data[order_id]['product_title']
         quantity = claimed_data[order_id]['quantity']
-        total_price = claimed_data[order_id].get('total', '1')  # Extract total price from the order data
+        total_price = claimed_data[order_id].get('total', config['MIN_PRODUCT_PRICE'])  # Extract total price from the order data
         claimed_data[order_id]['status'] = "Delivered"
         save_json(config['CLAIMED_JSON'], claimed_data)
 
@@ -311,7 +331,7 @@ async def deliver(ctx, order_id: str, *args):
 
         if ctx.message.attachments:
             file = ctx.message.attachments[0]
-            dm_embed.add_field(name = "", value="\n__**Please check the attachment below:__**", inline=False)
+            dm_embed.add_field(name="", value="\n__**Please check the attachment below:__**", inline=False)
             await user.send(embed=dm_embed)
             await user.send(file=await file.to_file())
         elif args:
@@ -319,16 +339,19 @@ async def deliver(ctx, order_id: str, *args):
             dm_embed.add_field(name="Please see the product details below:", value=f"```\n{product_str}\n```", inline=False)
             await user.send(embed=dm_embed)
         else:
-            dm_embed.add_field(name = "", value="\n**Please check your ticket or DMs.**", inline=False)
+            dm_embed.add_field(name="", value="\n**Please check your ticket or DMs.**", inline=False)
             await user.send(embed=dm_embed)
 
         await ctx.send(embed=create_embed("Order Status Updated", f"Order **{order_id}** status has been updated to delivered. A message has been sent to the user."))
+        
+        if total_price <= config['MIN_PRODUCT_PRICE']:
+            total_price = config['MIN_PRODUCT_PRICE']
 
         # Create the vouch message embed
         vouch_message = f"+rep <@{config['OWNER_ID']}> {product} {quantity}x ${total_price}"
         vouch_embed = discord.Embed(
             title="Vouch Message",
-            description="Please copy and paste the following vouch message in https://discord.com/channels/888116029803360317/1234847586679263323:",
+            description="Please copy and paste the following vouch message in https://discord.com/channels/888116029803360317/1234847586679263323 :",
             color=embed_color
         )
         vouch_embed.add_field(name="Vouch Message", value=f"```\n{vouch_message}\n```", inline=False)
@@ -340,6 +363,7 @@ async def deliver(ctx, order_id: str, *args):
 
     else:
         await ctx.send(embed=create_embed("Error", f"Order **{order_id}** not found in the queue.", discord.Color.red()))
+
 
 @bot.command()
 @is_admin_or_owner()
@@ -378,27 +402,38 @@ async def help(ctx):
     embed.add_field(name=".deliver <order_id> (product/attachment)", value="Mark an order as delivered", inline=False)
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
     embed.add_field(name=".set_queue <channel_id>", value="Set the queue channel ID", inline=False)
-    embed.add_field(name=".check ", value="Checks pending orders", inline=False)
+    embed.add_field(name=".check /(user_ping)/(orderid", value="Checks all pending orders, can also check pending order for a user/orderid", inline=False)
+    embed.add_field(name=".restart ", value="Restarts the bot", inline=False)
     await ctx.send(embed=embed)
+
+
 @bot.command()
 @is_admin_or_owner()
-async def check(ctx):
-    # Get the queue channel ID from the config and fetch the channel
+async def restart(ctx):
+    await ctx.send(embed=create_embed("Restarting", "The bot is restarting..."))
+    # Stop the bot
+    await bot.close()
+    # Restart the bot using a system command
+    os.execv(sys.executable, ['python'] + [file_name] + [sys.argv[0]])
+
+@bot.command()
+@is_admin_or_owner()
+async def check(ctx, *, query=None):
+    # Fetch the queue channel
     queue_channel_id = config["QUEUE_CHANNEL_ID"]
     queue_channel = bot.get_channel(queue_channel_id)
-
     if not queue_channel:
         await ctx.send(embed=create_embed("Error", "Queue channel not found."))
         return
 
     # Dictionary to store message statuses
     message_status = {}
-    
-    # Fetch the last 100 messages from the queue channel
-    async for message in queue_channel.history(limit=100):
+
+    # Fetch the last 500 messages from the queue channel
+    async for message in queue_channel.history(limit=500):
         if message.embeds:
-            embed = message.embeds[0].to_dict()
-            footer_text = embed.get('footer', {}).get('text', '')
+            embed = message.embeds[0]
+            footer_text = embed.footer.text
             order_id = footer_text.replace('Order ID: ', '').strip()
             message_status[order_id] = embed
 
@@ -407,62 +442,124 @@ async def check(ctx):
 
     # Extract detailed order information
     detailed_orders = {k: v for k, v in claimed_data.items() if isinstance(v, dict) and 'status' in v}
-
     # Dictionary to store pending orders
     pending_orders = {}
     for order_id, embed in message_status.items():
-        description = embed.get('description', '')
+        description = embed.description
         if 'Pending' in description:
             pending_orders[order_id] = embed
 
-    # Check if there are any pending orders
-    if not pending_orders:
-        await ctx.send(embed=create_embed("No Pending Orders", "There are no pending orders at the moment."))
-        return
+    if query:
+        if query in claimed_data:  # Check if query is an order ID
+            if query in pending_orders:
+                await ctx.send(embed=pending_orders[query])
+            else:
+                await ctx.send(embed=create_embed("Error", f"Order **{query}** not found in the queue.", discord.Color.red()))
+        else:
+            try:
+                user = await commands.MemberConverter().convert(ctx, query)
+                user_orders = [
+                    order for order, data in detailed_orders.items()
+                    if isinstance(data, dict)
+                    and isinstance(data.get('custom_fields'), dict)
+                    and data['custom_fields'].get('discord_id') == str(user.id)
+                    and data.get('status', '').lower() == 'completed'
+                ]
+                
 
-    # List to store embeds for pending orders
-    embeds = []
-    current_embed = create_embed("Pending Orders", "")
-    field_count = 0
+                if user_orders:
+                    # Create embeds for user orders
+                    embeds = []
+                    current_embed = create_embed(f"Pending Orders for {user}", "")
+                    
+                    field_count = 0
+                    current_embed_size = len(current_embed.title) + len(current_embed.description)
 
-    # Process each pending order
-    for order_id, embed in pending_orders.items():
-        description = embed.get('description', '')
+                    for order_id in user_orders:
+                        embed = pending_orders.get(order_id)
+                        if embed:
+                            description = embed.description
+                            # Parse the description for user, product, quantity, and status
+                            user_line, product_line, quantity_line, status_line = description.split('\n')
+                            user_mention = user_line.split('|')[1].strip()
+                            product = product_line.split('|')[1].strip()
+                            quantity = quantity_line.split('|')[1].strip()
+                            status = status_line.split('|')[1].strip()
 
-        # Parse the description for user, product, quantity, and status
-        user_line, product_line, quantity_line, status_line = description.split('\n')
-        
-        user_mention = user_line.split('|')[1].strip()
-        product = product_line.split('|')[1].strip()
-        quantity = quantity_line.split('|')[1].strip()
-        status = status_line.split('|')[1].strip()
+                            order_info = (
+                                f"**<:user:1263827156723826770> Name**: {user_mention}\n"
+                                f"**<:world:1263827158397227061> Product**: {product}\n"
+                                f"**<:tool:1263827165737254933> Quantity**: {quantity}\n"
+                                f"**<:check:1263827108581605427> Order ID**: {order_id}\n"
+                                f"**<:check:1263827108581605427> Status**: {status}\n"
+                            )
 
-        # Format order information
-        order_info = (
-            f"**<:user:1263827156723826770> Name**: {user_mention}\n"
-            f"**<:world:1263827158397227061> Product**: {product}\n"
-            f"**<:tool:1263827165737254933> Quantity**: {quantity}\n"
-            f"**<:check:1263827108581605427> Order ID**: {order_id}\n"
-            f"**<:check:1263827108581605427> Status**: {status}\n"
-        )
+                            order_info_size = len(f"Order {order_id}") + len(order_info)
 
-        # Add a new embed if the current one exceeds 25 fields
-        if field_count + 1 > 25:
-            embeds.append(current_embed)
-            current_embed = create_embed("Pending Orders (cont.)", "")
+                            if field_count + 1 > 25 or current_embed_size + order_info_size > 6000:
+                                embeds.append(current_embed)
+                                current_embed = create_embed(f"Pending Orders for {user} (cont.)", "")
+                                field_count = 0
+                                current_embed_size = len(current_embed.title) + len(current_embed.description)
+
+                            current_embed.add_field(name=f"Order {order_id}", value=order_info, inline=False)
+                            current_embed.set_image(url=config["IMAGE_URL"])
+                            field_count += 1
+                            current_embed_size += order_info_size
+
+                    if current_embed.fields:
+                        embeds.append(current_embed)
+
+                    for embed in embeds:
+                        await ctx.send(embed=embed)
+                else:
+                    await ctx.send(embed=create_embed("Error", f"No pending orders found for {user}.", discord.Color.red()))
+            except commands.BadArgument:
+                await ctx.send(embed=create_embed("Error", "Invalid query. Please provide a valid order ID or user mention.", discord.Color.red()))
+    else:
+        # List all pending orders if no query is provided
+        if pending_orders:
+            embeds = []
+            current_embed = create_embed("Pending Orders", "")
             field_count = 0
+            current_embed_size = len(current_embed.title) + len(current_embed.description)
 
-        # Add the order information to the current embed
-        current_embed.add_field(name=f"Order {order_id}", value=order_info, inline=False)
-        field_count += 1
+            for order_id, embed in pending_orders.items():
+                description = embed.description
+                user_line, product_line, quantity_line, status_line = description.split('\n')
+                user_mention = user_line.split('|')[1].strip()
+                product = product_line.split('|')[1].strip()
+                quantity = quantity_line.split('|')[1].strip()
+                status = status_line.split('|')[1].strip()
 
-    # Add the final embed if it has fields
-    if current_embed.fields:
-        embeds.append(current_embed)
+                order_info = (
+                    f"**<:user:1263827156723826770> Name**: {user_mention}\n"
+                    f"**<:world:1263827158397227061> Product**: {product}\n"
+                    f"**<:tool:1263827165737254933> Quantity**: {quantity}\n"
+                    f"**<:check:1263827108581605427> Order ID**: {order_id}\n"
+                    f"**<:check:1263827108581605427> Status**: {status}\n"
+                )
 
-    # Send all the embeds
-    for embed in embeds:
-        await ctx.send(embed=embed)
+                order_info_size = len(f"Order {order_id}") + len(order_info)
+
+                if field_count + 1 > 25 or current_embed_size + order_info_size > 6000:
+                    embeds.append(current_embed)
+                    current_embed = create_embed("Pending Orders (cont.)", "")
+                    field_count = 0
+                    current_embed_size = len(current_embed.title) + len(current_embed.description)
+
+                current_embed.add_field(name=f"Order {order_id}", value=order_info, inline=False)
+                field_count += 1
+                current_embed_size += order_info_size
+
+            if current_embed.fields:
+                embeds.append(current_embed)
+
+            for embed in embeds:
+                await ctx.send(embed=embed)
+        else:
+            await ctx.send(embed=create_embed("Info", "No pending orders found."))
+
 
 # Ensure the unclaimed orders folder exists
 os.makedirs(config['UNCLAIMED_FOLDER'], exist_ok=True)
