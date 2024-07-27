@@ -38,8 +38,8 @@
 - 🔍 `.deliver <order_id>` - Marks an order as delivered
 - 🧹 `.purge` - Delete all messages sent by the bot in the queue channel
 - 🔧 `.set_queue <channel_id>` - Set the queue channel ID without accessing config.json
-- 🔎 `.check` - Shows all pending orders in the Queue
-
+- 🔎 `.check /(user_ping)/(orderid)` - Shows all pending orders in the Queue, can also check pending order for a user/orderid
+- ⚙️ `.restart` - Restarts the bot
 ---
 #### 📹 Preview
 
