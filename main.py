@@ -279,8 +279,15 @@ async def pend(ctx, order_id: str):
 async def deliver(ctx, order_id: str, *args):
     claimed_data = load_json(config['CLAIMED_JSON'])
     if order_id in claimed_data:
-        user_id = claimed_data[order_id].get('user', None)
-        
+        order_data = claimed_data[order_id]
+        fields = order_data.get('custom_fields')
+        if fields:
+            user_id = fields.get('discord_id')
+        else:
+            user_id = None
+
+        print(user_id)
+
         if not user_id:
             await ctx.send(embed=create_embed("Ping User Required", f"Please ping the user for order **{order_id}**."))
             
@@ -402,7 +409,7 @@ async def help(ctx):
     embed.add_field(name=".deliver <order_id> (product/attachment)", value="Mark an order as delivered", inline=False)
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
     embed.add_field(name=".set_queue <channel_id>", value="Set the queue channel ID", inline=False)
-    embed.add_field(name=".check /(user_ping)/(orderid)", value="Shows all pending orders in the Queue, can also check pending order for a user/orderid", inline=False)
+    embed.add_field(name=".check ", value="Checks pending orders", inline=False)
     embed.add_field(name=".restart ", value="Restarts the bot", inline=False)
     await ctx.send(embed=embed)
 
@@ -414,11 +421,13 @@ async def restart(ctx):
     # Stop the bot
     await bot.close()
     # Restart the bot using a system command
-    os.execv(sys.executable, ['python'] + [file_name] + [sys.argv[0]])
+    os.execv(sys.executable, ["nohup"] + ['python'] + [file_name] + ["&"] + [sys.argv[0]])
 
 @bot.command()
 @is_admin_or_owner()
 async def check(ctx, *, query=None):
+    """Checks pending orders based on a specific order ID, user mention, or lists all pending orders if no query is provided."""
+
     # Fetch the queue channel
     queue_channel_id = config["QUEUE_CHANNEL_ID"]
     queue_channel = bot.get_channel(queue_channel_id)
@@ -463,7 +472,7 @@ async def check(ctx, *, query=None):
                     if isinstance(data, dict)
                     and isinstance(data.get('custom_fields'), dict)
                     and data['custom_fields'].get('discord_id') == str(user.id)
-                    and data.get('status', '').lower() == 'completed'
+                    and data.get('status', '').upper() == 'COMPLETED'
                 ]
                 
 
@@ -564,6 +573,7 @@ async def check(ctx, *, query=None):
 # Ensure the unclaimed orders folder exists
 os.makedirs(config['UNCLAIMED_FOLDER'], exist_ok=True)
 delete_old_unclaimed()
+
 
 # Run the bot
 bot.run(config['TOKEN'])
