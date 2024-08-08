@@ -222,7 +222,7 @@ async def dele(ctx, order_id: str):
 async def add(ctx, order_id: str, product: str, quantity: int, user: discord.User):
     claimed_data = load_json(config['CLAIMED_JSON'])
     claimed_data[order_id] = {
-        "product": product,
+        "product_title": product,
         "quantity": quantity,
         "user": user.id,
         "status": "Pending"
