@@ -8,7 +8,6 @@ from discord.ui import Button, View
 import sys
 import asyncio
 
-
 # Load configuration
 def load_config():
     with open('config.json', 'r') as f:
@@ -45,7 +44,6 @@ def format_color(color):
 # Usage example
 embed_color = format_color(config["EMBED_COLOR"])
 
-
 def delete_old_unclaimed():
     now = datetime.now()
     for file in os.listdir(config['UNCLAIMED_FOLDER']):
@@ -58,7 +56,7 @@ def delete_old_unclaimed():
 def create_embed(title, description, color=embed_color):
     embed = discord.Embed(title=title, description=description, color=color)
     embed.set_thumbnail(url=config["THUMBNAIL_URL"])
-    embed.set_footer(text=f"{config["FOOTER"]} • {datetime.now().strftime('%H:%M:%S')}", icon_url=config["THUMBNAIL_URL"])
+    embed.set_footer(text=f"{config['FOOTER']} • {datetime.now().strftime('%H:%M:%S')}", icon_url=config["THUMBNAIL_URL"])
     return embed
 
 # Check admin or owner
@@ -102,6 +100,17 @@ class OrderModal(discord.ui.Modal):
                     claimed_data[order_id]['message_id'] = message.id
                     claimed_data[order_id]['channel_id'] = message.channel.id
                     save_json(config['CLAIMED_JSON'], claimed_data)
+
+                    # Assign roles if enabled
+                    if config.get("ENABLED_REDEEMED", False):
+                        redeemed_role = interaction.guild.get_role(config["REDEEMED_ROLE_ID"])
+                        if redeemed_role:
+                            await interaction.user.add_roles(redeemed_role)
+
+                    if config.get("ENABLED_REMOVE", False):
+                        remove_role = interaction.guild.get_role(config["REMOVE_ROLE_ID"])
+                        if remove_role:
+                            await interaction.user.remove_roles(remove_role)
 
                     await interaction.response.send_message(embed=create_embed("Success", "Order has been successfully redeemed and added to the queue! Please be patient. You can also open a ticket in https://ptb.discord.com/channels/888116029803360317/1234847607684075542 for it to be delivered faster."), ephemeral=True)
 
@@ -208,12 +217,21 @@ async def dele(ctx, order_id: str):
     if order_id in claimed_data:
         message_id = claimed_data[order_id]['message_id']
         channel_id = claimed_data[order_id]['channel_id']
+        user_id = claimed_data[order_id]['user']
         del claimed_data[order_id]
         save_json(config['CLAIMED_JSON'], claimed_data)
         channel = bot.get_channel(channel_id)
         message = await channel.fetch_message(message_id)
         await message.delete()
         await ctx.send(embed=create_embed("Order Removed", f"Order **{order_id}** has been removed from the queue."))
+
+        # Assign roles if enabled
+        if config.get("ENABLED_DELETED", False) and user_id:
+            deleted_role = ctx.guild.get_role(config["DELETED_ROLE_ID"])
+            user = await ctx.guild.fetch_member(user_id)
+            if deleted_role and user:
+                await user.add_roles(deleted_role)
+
     else:
         await ctx.send(embed=create_embed("Error", f"Order **{order_id}** not found in the queue.", discord.Color.red()))
 
@@ -286,8 +304,6 @@ async def deliver(ctx, order_id: str, *args):
         else:
             user_id = None
 
-        print(user_id)
-
         if not user_id:
             await ctx.send(embed=create_embed("Ping User Required", f"Please ping the user for order **{order_id}**."))
             
@@ -354,6 +370,12 @@ async def deliver(ctx, order_id: str, *args):
         if total_price <= config['MIN_PRODUCT_PRICE']:
             total_price = config['MIN_PRODUCT_PRICE']
 
+        # Assign roles if enabled
+        if config.get("ENABLED_DELIVERED", False):
+            delivered_role = ctx.guild.get_role(config["DELIVERED_ROLE_ID"])
+            if delivered_role and user:
+                await user.add_roles(delivered_role)
+
         # Create the vouch message embed
         vouch_message = f"+rep <@{config['OWNER_ID']}> {product} {quantity}x ${total_price}"
         vouch_embed = discord.Embed(
@@ -392,10 +414,72 @@ async def purge(ctx):
 
 @bot.command()
 @is_admin_or_owner()
-async def set_queue(ctx, channel_id: int):
-    config['QUEUE_CHANNEL_ID'] = channel_id
-    save_json('config.json', config)
-    await ctx.send(embed=create_embed("Queue Channel Updated", f"The queue channel ID has been updated to <#{channel_id}>."))
+async def set(ctx, setting: str = None, *, value: str = None):
+    """
+    Command to set various configuration options.
+    Usage: .set <setting> <value>
+    Example: .set token <new_token>
+    """
+    if setting is None or setting.lower() == "help":
+        # Display the help message for .set command
+        embed = create_embed("Set Command Help", "Use the following commands to update the configuration:")
+        embed.add_field(name=".set token <value>", value="Set the bot token.", inline=False)
+        embed.add_field(name=".set queue_channel_id <value>", value="Set the queue channel ID.", inline=False)
+        embed.add_field(name=".set sellix_api_key <value>", value="Set the Sellix API key.", inline=False)
+        embed.add_field(name=".set unclaimed_folder <value>", value="Set the unclaimed orders folder path.", inline=False)
+        embed.add_field(name=".set claimed_json <value>", value="Set the claimed orders JSON file path.", inline=False)
+        embed.add_field(name=".set owner_id <value>", value="Set the owner ID.", inline=False)
+        embed.add_field(name=".set image_url <value>", value="Set the image URL used in embeds.", inline=False)
+        embed.add_field(name=".set thumbnail_url <value>", value="Set the thumbnail URL used in embeds.", inline=False)
+        embed.add_field(name=".set footer <value>", value="Set the footer text used in embeds.", inline=False)
+        embed.add_field(name=".set bot_status <value>", value="Set the bot status text.", inline=False)
+        embed.add_field(name=".set embed_color <value>", value="Set the embed color (hex format).", inline=False)
+        embed.add_field(name=".set redeemed_role_id <value>", value="Set the redeemed role ID.", inline=False)
+        embed.add_field(name=".set remove_role_id <value>", value="Set the remove role ID.", inline=False)
+        embed.add_field(name=".set delivered_role_id <value>", value="Set the delivered role ID.", inline=False)
+        embed.add_field(name=".set deleted_role_id <value>", value="Set the deleted role ID.", inline=False)
+        embed.add_field(name=".set min_product_price <value>", value="Set the minimum product price.", inline=False)
+        await ctx.send(embed=embed)
+        return
+
+    setting = setting.lower()
+    valid_settings = {
+        "token": "TOKEN",
+        "queue_channel_id": "QUEUE_CHANNEL_ID",
+        "sellix_api_key": "SELLIX_API_KEY",
+        "unclaimed_folder": "UNCLAIMED_FOLDER",
+        "claimed_json": "CLAIMED_JSON",
+        "owner_id": "OWNER_ID",
+        "image_url": "IMAGE_URL",
+        "thumbnail_url": "THUMBNAIL_URL",
+        "footer": "FOOTER",
+        "bot_status": "BOT_STATUS",
+        "embed_color": "EMBED_COLOR",
+        "redeemed_role_id": "REDEEMED_ROLE_ID",
+        "remove_role_id": "REMOVE_ROLE_ID",
+        "delivered_role_id": "DELIVERED_ROLE_ID",
+        "deleted_role_id": "DELETED_ROLE_ID",
+        "min_product_price": "MIN_PRODUCT_PRICE"
+    }
+
+    if setting not in valid_settings:
+        await ctx.send(embed=create_embed("Error", f"Invalid setting: `{setting}`. Use `.set help` to see valid settings.", discord.Color.red()))
+        return
+
+    if value is None:
+        await ctx.send(embed=create_embed("Error", f"No value provided for `{setting}`. Use `.set {setting} <value>`.", discord.Color.red()))
+        return
+
+    config_key = valid_settings[setting]
+
+    try:
+        if config_key in ["QUEUE_CHANNEL_ID", "OWNER_ID", "REDEEMED_ROLE_ID", "REMOVE_ROLE_ID", "DELIVERED_ROLE_ID", "DELETED_ROLE_ID", "MIN_PRODUCT_PRICE"]:
+            value = int(value)  # Convert to integer where necessary
+        config[config_key] = value
+        save_json('config.json', config)
+        await ctx.send(embed=create_embed("Configuration Updated", f"Setting `{config_key}` has been updated to `{value}`."))
+    except ValueError:
+        await ctx.send(embed=create_embed("Error", f"Invalid value for `{setting}`. It should be a number.", discord.Color.red()))
 
 # Help command
 @bot.command()
@@ -408,7 +492,7 @@ async def help(ctx):
     embed.add_field(name=".pend <order_id>", value="Mark an order as pending", inline=False)
     embed.add_field(name=".deliver <order_id> (product/attachment)", value="Mark an order as delivered", inline=False)
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
-    embed.add_field(name=".set_queue <channel_id>", value="Set the queue channel ID", inline=False)
+    embed.add_field(name=".set <setting> <value>", value="Set various bot configurations. Use `.set help` for details.", inline=False)
     embed.add_field(name=".check ", value="Checks pending orders", inline=False)
     embed.add_field(name=".restart ", value="Restarts the bot", inline=False)
     await ctx.send(embed=embed)
@@ -573,7 +657,6 @@ async def check(ctx, *, query=None):
 # Ensure the unclaimed orders folder exists
 os.makedirs(config['UNCLAIMED_FOLDER'], exist_ok=True)
 delete_old_unclaimed()
-
 
 # Run the bot
 bot.run(config['TOKEN'])
