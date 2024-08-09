@@ -12,8 +12,12 @@
   "THUMBNAIL_URL": "https://cdn.discordapp.com/avatars/1259085968774795324/36fbecac0d889750053b223695812dce.webp",
   "FOOTER": "Powered By .gg/bestnitro",
   "BOT_STATUS": ".gg/bestnitro",
-  "EMBED_COLOR": "#FC87C4"
+  "EMBED_COLOR": "#FC87C4",
 
+  "REDEEMED_ROLE_ID": 1234, "ENABLED_REDEEMED": false,
+  "REMOVE_ROLE_ID": 1234, "ENABLED_REMOVE": false,
+  "DELIVERED_ROLE_ID": 1234,"ENABLED_DELIVERED": false,
+  "DELETED_ROLE_ID": 1234,"ENABLED_DELETED": false,
   
   "MIN_PRODUCT_PRICE": 1
 }
