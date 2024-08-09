@@ -40,7 +40,7 @@
 - ⏳ `.pend <order_id>` - Marks an order as pending
 - 🔍 `.deliver <order_id>` - Marks an order as delivered
 - 🧹 `.purge` - Delete all messages sent by the bot in the queue channel
-- 🔧 `.set_queue <channel_id>` - Set the queue channel ID without accessing config.json
+- 🔧 `.set <setting> <value>` - Set various bot configurations. Use `.set help` for details.
 - 🔎 `.check /(user_ping)/(orderid)` - Shows all pending orders in the Queue, can also check pending order for a user/orderid
 - ⚙️ `.restart` - Restarts the bot
 ---
@@ -65,7 +65,7 @@ v0.0.1 ⋮ 07/20/2024
 v0.0.3 ⋮ 07/23/2024
 ! Made branding easier by adding a custom embed color directly into config.json with formatter in case of misuse. Improved .deliver command to also dm the user once the product has been delivered, made it so that it works with a str/int e.g. .deliver order-123 hi@gmail.com, with a file: e.g. .deliver order-123 product.txt (must be an attachment) or without anything e.g. .deliver order-123
 
-v0.1.0 ⋮ 07/27/2024
+v0.0.4 ⋮ 07/27/2024
 ! Efficiency: Reduced Sellix order checking interval from 15 to 10 seconds.
 ! Restart Command: Added `.restart` command for programmatic bot restarts.
 ! Check Command Improved to handle user-specific or order ID queries, displaying detailed pending orders.
@@ -76,6 +76,15 @@ v0.1.0 ⋮ 07/27/2024
 ! Admin Checks Simplified predicate function for admin/owner command execution.
 ! Help Command Updated to reflect new and modified commands.
 ! Bug Fixes Improved embed character limit handling and accurate claimed orders management.
+
+v0.1.0 ⋮ 08/10/2024
+! Added: .set command to update bot configurations directly from Discord.
+! Added: .set help command to display available settings and usage instructions.
+! Added: Role assignment functionality for redeemed, delivered, and deleted events.
+! Added: Optional role removal functionality when an order is redeemed.
+! Updated: Help command to include .set command details.
+! Removed: .set_queue command, now part of the .set command.
+! Fixed: Error handling for invalid settings or values in the .set command
 ```
 
 ---
