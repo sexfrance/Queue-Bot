@@ -62,6 +62,16 @@ def create_embed(title, description, color=embed_color):
 # Check admin or owner
 def is_admin_or_owner():
     def predicate(ctx):
+        # Check if guild is whitelisted
+        whitelist = config.get('GUILD_IDS', [])  # Changed from GUILD_ID to GUILD_IDS
+        if isinstance(whitelist, (int, str)):  # Handle single guild ID
+            whitelist = [int(whitelist)]
+        elif isinstance(whitelist, list):
+            whitelist = [int(gid) for gid in whitelist]
+        
+        if ctx.guild.id not in whitelist:
+            return False
+        
         return ctx.author.guild_permissions.administrator or ctx.author.id == config['OWNER_ID']
     return commands.check(predicate)
 
@@ -421,7 +431,7 @@ async def set(ctx, setting: str = None, *, value: str = None):
     Example: .set token <new_token>
     """
     if setting is None or setting.lower() == "help":
-        # Display the help message for .set command
+        # Add new setting to help message
         embed = create_embed("Set Command Help", "Use the following commands to update the configuration:")
         embed.add_field(name=".set token <value>", value="Set the bot token.", inline=False)
         embed.add_field(name=".set queue_channel_id <value>", value="Set the queue channel ID.", inline=False)
@@ -439,6 +449,7 @@ async def set(ctx, setting: str = None, *, value: str = None):
         embed.add_field(name=".set delivered_role_id <value>", value="Set the delivered role ID.", inline=False)
         embed.add_field(name=".set deleted_role_id <value>", value="Set the deleted role ID.", inline=False)
         embed.add_field(name=".set min_product_price <value>", value="Set the minimum product price.", inline=False)
+        embed.add_field(name=".set guild_ids <value>", value="Set whitelisted guild IDs (comma-separated for multiple)", inline=False)  # Changed from whitelist_guild_id to guild_ids
         await ctx.send(embed=embed)
         return
 
@@ -459,7 +470,8 @@ async def set(ctx, setting: str = None, *, value: str = None):
         "remove_role_id": "REMOVE_ROLE_ID",
         "delivered_role_id": "DELIVERED_ROLE_ID",
         "deleted_role_id": "DELETED_ROLE_ID",
-        "min_product_price": "MIN_PRODUCT_PRICE"
+        "min_product_price": "MIN_PRODUCT_PRICE",
+        "guild_ids": "GUILD_IDS"  # Changed from whitelist_guild_id/GUILD_ID to guild_ids/GUILD_IDS
     }
 
     if setting not in valid_settings:
@@ -473,13 +485,17 @@ async def set(ctx, setting: str = None, *, value: str = None):
     config_key = valid_settings[setting]
 
     try:
-        if config_key in ["QUEUE_CHANNEL_ID", "OWNER_ID", "REDEEMED_ROLE_ID", "REMOVE_ROLE_ID", "DELIVERED_ROLE_ID", "DELETED_ROLE_ID", "MIN_PRODUCT_PRICE"]:
+        if config_key == "GUILD_IDS":  # Changed from GUILD_ID to GUILD_IDS
+            # Handle comma-separated guild IDs
+            guild_ids = [int(gid.strip()) for gid in value.split(',')]
+            value = guild_ids if len(guild_ids) > 1 else guild_ids[0]
+        elif config_key in ["QUEUE_CHANNEL_ID", "OWNER_ID", "REDEEMED_ROLE_ID", "REMOVE_ROLE_ID", "DELIVERED_ROLE_ID", "DELETED_ROLE_ID", "MIN_PRODUCT_PRICE"]:
             value = int(value)  # Convert to integer where necessary
         config[config_key] = value
         save_json('config.json', config)
         await ctx.send(embed=create_embed("Configuration Updated", f"Setting `{config_key}` has been updated to `{value}`."))
     except ValueError:
-        await ctx.send(embed=create_embed("Error", f"Invalid value for `{setting}`. It should be a number.", discord.Color.red()))
+        await ctx.send(embed=create_embed("Error", f"Invalid value for `{setting}`. It should be a number or comma-separated numbers for guild IDs.", discord.Color.red()))
 
 # Help command
 @bot.command()
@@ -494,18 +510,7 @@ async def help(ctx):
     embed.add_field(name=".purge", value="Delete all messages sent by the bot in the queue channel", inline=False)
     embed.add_field(name=".set <setting> <value>", value="Set various bot configurations. Use `.set help` for details.", inline=False)
     embed.add_field(name=".check ", value="Checks pending orders", inline=False)
-    embed.add_field(name=".restart ", value="Restarts the bot", inline=False)
     await ctx.send(embed=embed)
-
-
-@bot.command()
-@is_admin_or_owner()
-async def restart(ctx):
-    await ctx.send(embed=create_embed("Restarting", "The bot is restarting..."))
-    # Stop the bot
-    await bot.close()
-    # Restart the bot using a system command
-    os.execv(sys.executable, ["nohup"] + ['python'] + [file_name] + ["&"] + [sys.argv[0]])
 
 @bot.command()
 @is_admin_or_owner()
@@ -527,8 +532,9 @@ async def check(ctx, *, query=None):
         if message.embeds:
             embed = message.embeds[0]
             footer_text = embed.footer.text
-            order_id = footer_text.replace('Order ID: ', '').strip()
-            message_status[order_id] = embed
+            order_id = footer_text.replace('Order ID: ', '').strip() 
+            if order_id is not None:
+                message_status[order_id] = embed
 
     # Load claimed data from the JSON file
     claimed_data = load_json(config['CLAIMED_JSON'])
