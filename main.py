@@ -337,15 +337,20 @@ async def deliver(ctx, order_id: str, *args):
 
         product = claimed_data[order_id]['product_title']
         quantity = claimed_data[order_id]['quantity']
-        total_price = claimed_data[order_id].get('total', config['MIN_PRODUCT_PRICE'])  # Extract total price from the order data
+        total_price = claimed_data[order_id].get('total', config['MIN_PRODUCT_PRICE'])
         claimed_data[order_id]['status'] = "Delivered"
         save_json(config['CLAIMED_JSON'], claimed_data)
 
         channel = bot.get_channel(claimed_data[order_id]['channel_id'])
         message = await channel.fetch_message(claimed_data[order_id]['message_id'])
         embed = message.embeds[0]
-        embed.description = embed.description.replace("<:check:1263827108581605427>・__**Status**__ | Pending", "<:check:1263827108581605427>・__**Status**__ | Delivered")
+
+        embed.description = embed.description.replace("Pending", "Delivered")
         await message.edit(embed=embed)
+
+        # Update the status in claimed_data
+        claimed_data[order_id]['status'] = "Delivered"
+        save_json(config['CLAIMED_JSON'], claimed_data)
 
         # Create the embed in the style of the queue system
         dm_embed = discord.Embed(
